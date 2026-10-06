@@ -1,11 +1,1 @@
-{
-  "version": "0.6.1-free-preview",
-  "mode": "synthetic-browser-memory",
-  "realRegistration": false,
-  "realMessaging": false,
-  "ads": false,
-  "payments": false,
-  "locationTracking": false,
-  "backend": false,
-  "productionGo": false
-}
+{"version":"0.7.1-diary-review","name":"메네라탈출일기","mode":"synthetic-browser-memory","primaryNavigation":["오늘","발견","대화"],"realLocation":false,"realPush":false,"realRegistration":false,"ads":false,"payments":false,"productionGo":false}
