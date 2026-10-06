@@ -1,0 +1,11 @@
+{
+  "version": "0.6.1-free-preview",
+  "mode": "synthetic-browser-memory",
+  "realRegistration": false,
+  "realMessaging": false,
+  "ads": false,
+  "payments": false,
+  "locationTracking": false,
+  "backend": false,
+  "productionGo": false
+}
