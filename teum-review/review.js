@@ -8,7 +8,7 @@ const name=id=>SAMPLE.settings[id]?.nickname??names[id]??'가상 사용자';
 const mainGroup='b2222222-2222-4222-8222-222222222222';
 const init=()=>({requests:[],messages:{},groups:[{id:mainGroup,title:'같은 노래 듣는 모임',description:'좋아하는 노래와 플레이리스트를 나눠요. 샘플 모임입니다.',owner:'owner',members:['adult','teen','younger','owner','eighteen'],posts:[{id:'seed-post',author:'owner',text:'요즘 반복해서 듣는 노래 하나씩 알려줘!',time:new Date().toISOString()}]}]});
 let social=init();let room=null;let selectedGroup=mainGroup;
-const restricted=(a,b)=>['teen','younger','eighteen'].includes(a)!==['teen','younger','eighteen'].includes(b);
+const restricted=(a,b)=>window.REVIEW08 ? !window.REVIEW08.model.canFind(a,b,'FRIENDS') : ['teen','younger','eighteen'].includes(a)!==['teen','younger','eighteen'].includes(b);
 const blocked=(a,b)=>DEMO.blocks.has([a,b].sort().join(':'))||SAMPLE.deleted.has(a)||SAMPLE.deleted.has(b);
 const previous=window.qaRequest;
 window.qaRequest=async q=>{

@@ -1,0 +1,47 @@
+/* Browser-memory review model, not server authorization or live tracking. */
+(()=>{'use strict';
+const fail=m=>{throw new Error(m);}, clone=x=>JSON.parse(JSON.stringify(x));
+const day=ms=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ms));
+const dateOK=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T00:00:00Z'))&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;
+const PLACES=Object.freeze([{id:'home',label:'내 동네',x:23,y:67,lat:37.55,lon:126.91},{id:'cafe',label:'약속 카페',x:65,y:37,lat:37.555,lon:126.924},{id:'park',label:'산책 공원',x:76,y:72,lat:37.547,lon:126.928},{id:'station',label:'역 근처',x:35,y:24,lat:37.559,lon:126.915}]);
+class CoupleReview {
+ constructor(io){this.io=io;this.clock=io.clock??(()=>Date.now());this.counter=0;this.relations=[];this.alerts=[];this.skips=new Map();}
+ id(prefix='c'){return `${prefix}-${this.clock()}-${++this.counter}`;}
+ user(id){const u=this.io.user(id);if(!u||!u.active)fail('이 가상 계정은 사용할 수 없어요.');return u;}
+ adult(id){const u=this.user(id);if(u.age<19)fail('성인 가상 계정끼리만 이용할 수 있어요.');return u;}
+ pair(a,b){const aa=this.adult(a),bb=this.adult(b);if(a===b||this.io.blocked(a,b))fail('이 연결은 사용할 수 없어요.');return [aa,bb];}
+ match(a,id){const m=this.io.matches().find(m=>m.id===id&&!m.closed&&m.pair.includes(a));if(!m)fail('서로 매칭된 연결이 필요해요.');this.pair(...m.pair);return m;}
+ emit(to,text,type='notice'){this.alerts.unshift({id:this.id('n'),to,text,type,at:this.clock(),read:false});this.alerts=this.alerts.slice(0,100);}
+ sweep(){const now=this.clock();for(const r of this.relations){if(r.phase==='closed')continue;let good=true;try{this.match(r.from,r.matchId);}catch{good=false;}if(!good||(r.phase==='pending'&&r.until<=now)){this.purge(r);continue;}if(r.sharing&&r.sharing.until<=now)r.sharing=null;if(r.mood&&r.moodDay!==day(now)){r.mood={};r.moodDay=day(now);}}}
+ purge(r){r.phase='closed';r.sharing=null;r.plans=[];r.wishes=[];r.mood={};r.anniversary=null;r.anniversaryProposal=null;}
+ current(a){this.sweep();return this.relations.find(r=>r.phase!=='closed'&&[r.from,r.to].includes(a))??null;}
+ relationship(a,id){this.sweep();const r=this.relations.find(r=>r.id===id&&r.phase==='active'&&[r.from,r.to].includes(a));if(!r)fail('두 사람 모두 커플 연결을 확인해야 해요.');this.match(a,r.matchId);return r;}
+ snapshot(a){const r=this.current(a);if(!r)return null;const result=clone(r);result.peer=r.from===a?r.to:r.from;if(result.sharing?.phase!=='active'&&result.sharing)result.sharing.points={};return result;}
+ matches(a){this.adult(a);this.sweep();return this.io.matches().filter(m=>{try{this.match(a,m.id);return true;}catch{return false;}}).map(m=>({id:m.id,peer:m.pair.find(x=>x!==a)}));}
+ canFind(a,b,mode){try{const x=this.user(a),y=this.user(b);if(a===b||this.io.blocked(a,b)||y.visibility==='PRIVATE'||this.io.visible?.(a,b)===false)return false;if((x.age<19)!==(y.age<19)||(x.age<19&&Math.abs(x.age-y.age)>2))return false;if(mode==='DATE'){this.pair(a,b);if(!x.dating||!y.dating||x.dmPolicy==='OFF'||y.dmPolicy==='OFF')return false;const ar=this.current(a),br=this.current(b);if(ar?.phase==='active'||br?.phase==='active')return false;}return true;}catch{return false;}}
+ swipe(a,b,mode,action){if(!['DATE','FRIENDS'].includes(mode)||!['like','pass'].includes(action))fail('선택을 확인해 주세요.');if(!this.canFind(a,b,mode))fail('현재 연결할 수 없는 프로필이에요.');const key=`${a}:${mode}:${b}`,dec=this.io.decisions();if(dec[key])return {repeated:true};dec[key]=true;if(action==='pass'){this.skips.set(a,{b,mode});return {passed:true};}this.skips.delete(a);if(mode==='FRIENDS')return {friend:true};this.io.likes().add(`${a}>${b}`);if(!this.io.likes().has(`${b}>${a}`))return {matched:false};let m=this.io.matches().find(m=>m.pair.includes(a)&&m.pair.includes(b));if(m?.closed)return {matched:false};if(!m){m={id:this.id('match'),pair:[a,b],closed:false};this.io.matches().push(m);this.emit(b,'서로 좋아요! 새 매칭이 생겼어.','match');}return {matched:true,matchId:m.id};}
+ undo(a){this.user(a);const s=this.skips.get(a);if(!s)fail('방금 넘긴 카드만 되돌릴 수 있어요.');delete this.io.decisions()[`${a}:${s.mode}:${s.b}`];this.skips.delete(a);return s;}
+ request(a,matchId){const m=this.match(a,matchId),b=m.pair.find(x=>x!==a);if(this.current(a)||this.current(b))fail('진행 중인 커플 연결을 먼저 확인해 주세요.');const r={id:this.id('couple'),matchId,from:a,to:b,phase:'pending',until:this.clock()+600000,sharing:null,plans:[],wishes:[],mood:{},moodDay:day(this.clock()),anniversary:null,anniversaryProposal:null};this.relations.push(r);this.emit(b,'매칭 상대가 커플 연결을 요청했어. 직접 확인해 줘.','couple');return clone(r);}
+ accept(a,id){this.sweep();const r=this.relations.find(r=>r.id===id&&r.phase==='pending');if(!r||r.to!==a)fail('요청받은 계정에서만 확인할 수 있어요.');this.match(a,r.matchId);if(this.relations.some(x=>x!==r&&x.phase!=='closed'&&[x.from,x.to].some(p=>[r.from,r.to].includes(p))))fail('다른 커플 연결이 진행 중이에요.');r.phase='active';r.since=this.clock();r.until=null;this.emit(r.from,'두 사람 모두 커플 연결을 확인했어. 위치 공유는 아직 꺼져 있어.','couple');return clone(r);}
+ end(a,id){this.sweep();const r=this.relations.find(r=>r.id===id&&r.phase!=='closed'&&[r.from,r.to].includes(a));if(!r)fail('진행 중인 연결이 없어요.');this.purge(r);const m=this.io.matches().find(m=>m.id===r.matchId);if(m)m.closed=true;this.emit(r.from===a?r.to:r.from,'커플 연결이 종료됐어. 공유 중인 위치와 함께 쓰던 기록도 닫혔어.');return true;}
+ requestSharing(a,id){const r=this.relationship(a,id);if(r.sharing)fail('현재 공유 요청을 먼저 종료해 주세요.');r.sharing={from:a,to:r.from===a?r.to:r.from,phase:'pending',until:this.clock()+600000,points:{}};this.emit(r.sharing.to,'상대가 1시간 위치 공유 체험을 요청했어. 동의 전에는 아무것도 공유되지 않아.','location');return clone(r.sharing);}
+ acceptSharing(a,id){const r=this.relationship(a,id),s=r.sharing;if(!s||s.phase!=='pending'||s.to!==a)fail('요청받은 사람이 별도로 동의해야 해요.');s.phase='active';s.until=this.clock()+3600000;return clone(s);}
+ stopSharing(a,id){const r=this.relationship(a,id);r.sharing=null;return true;}
+ locate(a,id,placeId){const r=this.relationship(a,id),s=r.sharing,p=PLACES.find(p=>p.id===placeId);if(!s||s.phase!=='active')fail('양쪽이 위치 공유에 동의한 동안만 가능해요.');if(!p)fail('준비된 가상 위치만 선택할 수 있어요.');s.points[a]={...p,at:this.clock()};return clone(s.points[a]);}
+ distance(a,id){const r=this.relationship(a,id),s=r.sharing;if(!s||s.phase!=='active')return null;const aa=s.points[a],bb=s.points[r.from===a?r.to:r.from];if(!aa||!bb||[aa,bb].some(p=>this.clock()-p.at>300000))return null;const dx=(aa.lon-bb.lon)*Math.cos(37.55*Math.PI/180)*111.32,dy=(aa.lat-bb.lat)*110.57;return Math.round(Math.hypot(dx,dy)*10)/10;}
+ mood(a,id,value){const r=this.relationship(a,id);if(!['대화하고 싶어','혼자 쉬고 싶어','그냥 그래','보고 싶어','기분 좋아'].includes(value))fail('오늘 기분을 골라 주세요.');r.mood[a]=value;r.moodDay=day(this.clock());return true;}
+ withdrawMood(a,id){delete this.relationship(a,id).mood[a];}
+ proposeDate(a,id,placeId,when){const r=this.relationship(a,id),p=PLACES.find(p=>p.id===placeId&&p.id!=='home'),time=Date.parse(when);if(!p||!Number.isFinite(time)||time<=this.clock()||time>this.clock()+365*86400000)fail('공개 장소와 1년 이내의 미래 시간을 선택해 주세요.');if(r.plans.filter(p=>p.state!=='cancelled').length>=10)fail('약속은 열 개까지 만들 수 있어요.');const plan={id:this.id('plan'),from:a,to:r.from===a?r.to:r.from,place:p.label,when:new Date(time).toISOString(),state:'pending'};r.plans.push(plan);this.emit(plan.to,'새 데이트 약속 제안이 왔어. 시간과 장소를 확인해 줘.','date');return clone(plan);}
+ confirmDate(a,id,planId){const r=this.relationship(a,id),p=r.plans.find(p=>p.id===planId&&p.state==='pending'&&p.to===a);if(!p||Date.parse(p.when)<=this.clock())fail('요청받은 미래 약속만 수락할 수 있어요.');p.state='confirmed';return true;}
+ cancelDate(a,id,planId){const r=this.relationship(a,id),p=r.plans.find(p=>p.id===planId);if(!p)fail('약속을 찾지 못했어요.');p.state='cancelled';return true;}
+ proposeAnniversary(a,id,value){const r=this.relationship(a,id);if(!dateOK(value)||value>day(this.clock())||value<'2000-01-01')fail('오늘까지의 올바른 날짜를 선택해 주세요.');r.anniversaryProposal={from:a,to:r.from===a?r.to:r.from,value};return true;}
+ confirmAnniversary(a,id){const r=this.relationship(a,id),p=r.anniversaryProposal;if(!p||p.to!==a)fail('상대가 제안한 날짜만 확인할 수 있어요.');r.anniversary=p.value;r.anniversaryProposal=null;return true;}
+ wish(a,id,text){const r=this.relationship(a,id);if(typeof text!=='string'||!text.trim()||text.trim().length>80||r.wishes.length>=20)fail('함께 하고 싶은 일을 80자 이내로 적어 줘. 최대 20개야.');const w={id:this.id('wish'),author:a,text:text.trim(),done:false};r.wishes.push(w);return clone(w);}
+ toggleWish(a,id,wid){const r=this.relationship(a,id),w=r.wishes.find(w=>w.id===wid);if(!w)fail('목록을 찾지 못했어요.');w.done=!w.done;return w.done;}
+ removeWish(a,id,wid){const r=this.relationship(a,id);r.wishes=r.wishes.filter(w=>w.id!==wid);}
+ inbox(a){this.user(a);return clone(this.alerts.filter(n=>n.to===a));}
+ readInbox(a){this.user(a);this.alerts.filter(n=>n.to===a).forEach(n=>n.read=true);}
+ clear(){this.relations=[];this.alerts=[];this.skips.clear();}
+}
+window.CoupleReview=CoupleReview;window.REVIEW_PLACES=PLACES;
+})();
