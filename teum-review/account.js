@@ -129,8 +129,7 @@ class AccountWorkspace {
                 this.say('사진을 먼저 선택해 주세요.');
                 return;
             }
-            const r = await this.run(async () => { if (!prepared)
-                prepared = { base64: await this.prepare(file.files[0]), clientId: requestId() }; if (!this.alive)
+            const r = await this.run(async () => { const selectedFile = file.files[0]; if (!prepared) { const base64 = await this.prepare(selectedFile); if (file.files[0] !== selectedFile) throw Error('사진 선택이 바뀌어 전송하지 않았어요. 다시 눌러 주세요.'); prepared = { base64, clientId: requestId() }; } if (!this.alive)
                 throw Error('화면이 닫혀 전송하지 않았어요.'); return this.options.request('POST', '/api/v3/account/photos', prepared); });
             if (r) {
                 this.say('샘플 사진을 등록했어요. 이 화면 밖으로 전송되지 않아요.');
@@ -217,7 +216,7 @@ class AccountWorkspace {
             }
             if (!this.alive)
                 return;
-            this.download('TEUM_내작성데이터.json', out);
+            this.download('메네라탈출일기_샘플작성데이터.json', out);
             this.say('선택된 작성 데이터를 빠짐없이 페이지별로 받아 파일로 저장했어요.');
         });
     }
@@ -240,7 +239,7 @@ class AccountWorkspace {
                     this.releaseImages();
                     this.body.replaceChildren(node('h3', '', '삭제 요청을 접수했어요.'), node('p', '', '프로필 노출과 연결은 닫혔어요. 아직 모든 데이터 삭제가 완료된 것은 아니에요.'));
                     this.receiptForm();
-                    this.download('TEUM_삭제접수번호.json', { receiptId: r.receiptId, notice: '이 접수번호와 동일한 로그인 계정으로 상태 확인. 외부 계정 삭제 아님.' });
+                    this.download('메네라탈출일기_샘플삭제접수.json', { receiptId: r.receiptId, notice: '이 접수번호와 동일한 로그인 계정으로 상태 확인. 외부 계정 삭제 아님.' });
                     this.options.onDeleted?.();
                 }
             }, 'aw-danger'));

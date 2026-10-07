@@ -1,1 +1,40 @@
-{"version":"0.8.0-swipe-couple-review","name":"메네라탈출일기","mode":"synthetic-browser-memory","primaryNavigation":["발견","우리","대화"],"features":["pointer-and-touch-swipe","mutual-match","mutual-couple-confirmation","consented-example-location","date-proposals","anniversary-confirmation","shared-wishlist","opt-in-daily-mood","private-diary","existing-chat-groups-account"],"realLocation":false,"realPush":false,"realRegistration":false,"ads":false,"payments":false,"productionGo":false,"localChecks":{"stateModel":53,"browserScenarios":31,"mobileTouchAndFilters":5},"browserScope":"hash-bound DOM with same JS/CSS; not live transport or physical iOS"}
+{
+  "version": "0.8.1-release-review",
+  "name": "메네라탈출일기",
+  "mode": "synthetic-browser-memory",
+  "primaryNavigation": [
+    "발견",
+    "우리",
+    "대화"
+  ],
+  "realLocation": false,
+  "realPush": false,
+  "realRegistration": false,
+  "ads": false,
+  "payments": false,
+  "productionGo": false,
+  "baseCommit": "e263cdbaabc434a023f9970af06f046af6e12a8e",
+  "features": [
+    "swipe",
+    "mutual-match",
+    "couple-confirmation",
+    "scoped-location-consent",
+    "dates",
+    "anniversary-consent",
+    "wishlist",
+    "mood",
+    "private-diary-drafts",
+    "groups",
+    "chat",
+    "photos-review",
+    "sample-export-and-delete"
+  ],
+  "blockedProductionDependencies": [
+    "verified-age-provider",
+    "production-database",
+    "real-time-messaging",
+    "private-storage",
+    "moderation-operations",
+    "ads-approval"
+  ]
+}

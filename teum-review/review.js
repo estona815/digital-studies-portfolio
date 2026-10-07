@@ -8,7 +8,8 @@ const name=id=>SAMPLE.settings[id]?.nickname??names[id]??'가상 사용자';
 const mainGroup='b2222222-2222-4222-8222-222222222222';
 const init=()=>({requests:[],messages:{},groups:[{id:mainGroup,title:'같은 노래 듣는 모임',description:'좋아하는 노래와 플레이리스트를 나눠요. 샘플 모임입니다.',owner:'owner',members:['adult','teen','younger','owner','eighteen'],posts:[{id:'seed-post',author:'owner',text:'요즘 반복해서 듣는 노래 하나씩 알려줘!',time:new Date().toISOString()}]}]});
 let social=init();let room=null;let selectedGroup=mainGroup;
-const restricted=(a,b)=>window.REVIEW08 ? !window.REVIEW08.model.canFind(a,b,'FRIENDS') : ['teen','younger','eighteen'].includes(a)!==['teen','younger','eighteen'].includes(b);
+window.reviewSocialConnected=(a,b)=>social.requests.some(r=>r.state==='accepted'&&[r.from,r.to].includes(a)&&[r.from,r.to].includes(b));
+const restricted=(a,b)=>window.REVIEW08 ? (!window.REVIEW08.model.canFind(a,b,'FRIENDS')||SAMPLE.settings[a]?.dmPolicy==='OFF'||SAMPLE.settings[b]?.dmPolicy==='OFF') : ['teen','younger','eighteen'].includes(a)!==['teen','younger','eighteen'].includes(b);
 const blocked=(a,b)=>DEMO.blocks.has([a,b].sort().join(':'))||SAMPLE.deleted.has(a)||SAMPLE.deleted.has(b);
 const previous=window.qaRequest;
 window.qaRequest=async q=>{
@@ -40,24 +41,24 @@ function card(root,title,text){const box=make('article','','aw-section');box.app
 function isCurrent(a){return uid()===a&&!SAMPLE.deleted.has(a);}
 function friends(){
  const a=uid(),root=panel('친구 대화');if(!isCurrent(a)){root.append(make('p','삭제된 샘플 계정이에요. 다른 테스트 계정을 선택해 주세요.'));return;}
- const requests=social.requests.filter(r=>[r.from,r.to].includes(a)&&!blocked(r.from,r.to));
+ const requests=social.requests.filter(r=>[r.from,r.to].includes(a)&&!blocked(r.from,r.to)&&!restricted(r.from,r.to));
  if(room){const r=requests.find(r=>r.id===room&&r.state==='accepted');if(!r)room=null;else{
   root.append(btn('친구 대화 목록',()=>{room=null;friends();}));const peer=r.from===a?r.to:r.from;root.append(make('h3',`${name(peer)}님과의 친구 대화`));
   for(const m of social.messages[r.id]??[])card(root,m.author===a?'나':name(m.author),m.text);
   const form=make('form','','aw-section'),text=make('textarea');text.setAttribute('aria-label','친구 메시지');text.maxLength=1000;text.rows=3;text.style.cssText='width:100%;background:#261d2b;color:#fff0f6;border:1px solid #594158;border-radius:12px;padding:12px;font:inherit';
-  const send=btn('친구 메시지 보내기',()=>{},'dw-primary');send.type='submit';form.append(text,send);form.onsubmit=e=>{e.preventDefault();if(!isCurrent(a)||r.state!=='accepted'||blocked(a,peer))return;if(!text.value.trim())return;const m={id:uuid(),author:a,text:text.value.trim().slice(0,1000),time:new Date().toISOString()};(social.messages[r.id]??=[]).push(m);friends();note('샘플 메모리에 저장했어요. 상대 가상 계정으로 바꾸면 볼 수 있어요.');};root.append(form);return;
+  const send=btn('친구 메시지 보내기',()=>{},'dw-primary');send.type='submit';form.append(text,send);let composing=false;text.addEventListener('compositionstart',()=>composing=true);text.addEventListener('compositionend',()=>composing=false);form.onsubmit=e=>{e.preventDefault();if(composing)return;if(!isCurrent(a)||r.state!=='accepted'||blocked(a,peer)||restricted(a,peer))return;if(!text.value.trim())return;const m={id:uuid(),author:a,text:text.value.trim().slice(0,1000),time:new Date().toISOString()};(social.messages[r.id]??=[]).push(m);friends();note('샘플 메모리에 저장했어요. 상대 가상 계정으로 바꾸면 볼 수 있어요.');};root.append(form);return;
  }}
  if(!requests.length)root.append(make('p','아직 친구 요청이 없어. 사람 카드나 모임 멤버에서 대화를 요청해 봐.','dw-empty'));
  for(const r of requests){const peer=r.from===a?r.to:r.from;const box=card(root,name(peer),`${{pending:'요청 대기',accepted:'서로 수락한 친구',rejected:'거절됨',closed:'종료됨'}[r.state]} · ${r.intro}`);
-  if(r.to===a&&r.state==='pending')box.append(btn('친구 요청 수락',()=>{if(isCurrent(a)){r.state='accepted';friends();}} ,'dw-primary'),btn('친구 요청 거절',()=>{if(isCurrent(a)){r.state='rejected';friends();}}));
+  if(r.to===a&&r.state==='pending')box.append(btn('친구 요청 수락',()=>{if(isCurrent(a)&&!restricted(r.from,r.to)&&!blocked(r.from,r.to)){r.state='accepted';friends();}} ,'dw-primary'),btn('친구 요청 거절',()=>{if(isCurrent(a)){r.state='rejected';friends();}}));
   if(r.state==='accepted')box.append(btn('친구 대화 열기',()=>{room=r.id;friends();},'dw-primary'));
  }
 }
 function groups(){
  const a=uid(),root=panel('취향 모임');if(!isCurrent(a)){root.append(make('p','다른 테스트 계정을 선택해 주세요.'));return;}
  const chosen=social.groups.find(g=>g.id===selectedGroup);root.append(make('p','모임에 참여하고 게시판에 글을 남겨 봐. 장소·시간 투표는 사람·약속 메뉴에서 확인할 수 있어.','dw-muted'));
- for(const g of social.groups){const box=card(root,g.title,`${g.description} · ${g.members.length}명`);box.append(btn(g.members.includes(a)?'게시판 보기':'모임 참여',()=>{if(!isCurrent(a))return;if(!g.members.includes(a))g.members.push(a);selectedGroup=g.id;groups();},'dw-primary'));}
- if(chosen?.members.includes(a)){
+ for(const g of social.groups.filter(g=>!SAMPLE.deleted.has(g.owner))){const box=card(root,g.title,`${g.description} · ${g.members.length}명`);box.append(btn(g.members.includes(a)?'게시판 보기':'모임 참여',()=>{if(!isCurrent(a))return;if(!g.members.includes(a))g.members.push(a);selectedGroup=g.id;groups();},'dw-primary'));}
+ if(chosen?.members.includes(a)&&!SAMPLE.deleted.has(chosen.owner)){
   const area=card(root,`${chosen.title} 게시판`,'모든 글은 샘플 메모리에만 보관돼요.');
   for(const p of chosen.posts.filter(p=>!blocked(a,p.author)))card(area,name(p.author),p.text);
   const form=make('form','','aw-section'),text=make('textarea');text.setAttribute('aria-label','모임 게시글');text.maxLength=1000;text.rows=3;text.style.cssText='width:100%;background:#261d2b;color:#fff0f6;border:1px solid #594158;border-radius:12px;padding:12px;font:inherit';
